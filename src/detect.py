@@ -600,6 +600,12 @@ def detect_frame(D: np.ndarray, mask: np.ndarray, cfg: DetectConfig,
 _G: dict = {}
 
 
+def _init_worker(g: dict) -> None:
+    """Инициализация процесса-воркера (spawn): глобальные данные приходят аргументом."""
+    cv2.setNumThreads(1)            # параллелим процессами, внутри — один поток
+    _G.update(g)
+
+
 def _worker(args: tuple[int, int]) -> pd.DataFrame:
     a, b = args
     video, bg, cfg, channel = _G["video"], _G["bg"], _G["cfg"], _G["channel"]
@@ -621,7 +627,12 @@ def _worker(args: tuple[int, int]) -> pd.DataFrame:
 
 def detect_video(video: str, bg: Background, cfg: DetectConfig, i0: int, i1: int,
                  progress: bool = True) -> pd.DataFrame:
-    """Детекции на кадрах [i0, i1). Параллельно по кускам кадров (fork)."""
+    """Детекции на кадрах [i0, i1). Параллельно по кускам кадров.
+
+    Процессы запускаются через spawn, а не fork: fork из процесса, где уже
+    работают потоки OpenCV/BLAS, может унаследовать захваченный мьютекс,
+    и воркеры виснут навсегда.
+    """
     n_workers = cfg.workers or os.cpu_count() or 1
     n_workers = max(1, min(n_workers, (i1 - i0) // 20 or 1))
     _G.update(video=video, bg=bg, cfg=cfg, channel=cfg.channel)
@@ -635,10 +646,11 @@ def detect_video(video: str, bg: Background, cfg: DetectConfig, i0: int, i1: int
             parts.append(_worker(tsk))
             bar.update(tsk[1] - tsk[0])
     else:
-        ctx = mp.get_context("fork")
+        ctx = mp.get_context("spawn")
         counter = ctx.Value("i", 0)
         _G["counter"] = counter
-        with ctx.Pool(n_workers) as pool:
+        g = dict(video=video, bg=bg, cfg=cfg, channel=cfg.channel, counter=counter)
+        with ctx.Pool(n_workers, initializer=_init_worker, initargs=(g,)) as pool:
             res = pool.map_async(_worker, tasks, chunksize=1)
             last = 0
             while not res.ready():

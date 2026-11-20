@@ -1,0 +1,29 @@
+# Серия видео со своими параметрами + общая гистограмма зарядов:
+#   oiltrack batch videos.yaml
+# Пути — относительно этого файла. Скопируйте в videos.yaml и поправьте.
+
+config: config.yaml              # общий конфиг: константы установки, пороги (можно списком)
+out: output                      # корневая папка вывода: output/<имя_видео>/
+charges_out: output/charges_all  # общие заряды по всем видео
+review: false                    # true — рисовать review.mp4 и графики (+1.5 мин на видео)
+
+set:                             # общее для всех видео (необязательно; можно и в config.yaml)
+  charge:
+    reference_voltage_V: 500     # к какому напряжению приводить q_rel в общей гистограмме
+
+videos:                          # у каждого видео — своё, что отличается
+  - path: media/500_1.mov
+    set:
+      charge: {voltage_V: 500}
+
+  - path: media/700_1.mov
+    set:
+      charge: {voltage_V: 700}
+      field:
+        switches_s: [12.4, 31.0, 55.2]   # если моменты переключения известны из протокола
+        states: [off, on, off, on]
+
+  - path: media/700_2.mov
+    set:
+      charge: {voltage_V: 700}
+      t_end: 60                          # обработать только первые 60 с

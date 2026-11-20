@@ -1,0 +1,137 @@
+# oiltrack — конфигурация для IMG_6823.MOV.
+# Все пороги живут здесь; в коде только значения по умолчанию (oiltrack/config.py).
+# Любой параметр можно не указывать — возьмётся значение по умолчанию.
+
+video: IMG_6823.MOV
+t_start: null              # с; null — с начала (то же, что --t-start)
+t_end: null                # с; null — до конца
+
+roi:
+  auto: true               # маска круга поля зрения по медиане кадров
+  erode_px: 15             # отступ внутрь от края круга, px
+  n_frames: 30             # сколько равномерно взятых кадров для медианы
+  circle: null             # [cx, cy, R] — ручное задание (при auto: false)
+
+background:
+  window_s: 10.0           # окно скользящей статистики, с (≫ d/v: капля d≈4–20 px при 2 px/с)
+  sample_every: 5          # брать в фон каждый N-й кадр
+  update_every_s: 1.0      # шаг узлов фона, между ними — линейная интерполяция
+  percentile: 20           # 50 = медиана; 20 устойчивее к медленным каплям (они только светлее фона)
+
+detect:
+  channel: green
+  sigmas: [1.2, 1.8, 2.5, 3.5, 5, 7, 9, 12, 16, 20]   # масштабы LoG, px
+  threshold: auto          # auto → k_mad · MAD отклика (отдельно для кадра и масштаба)
+  k_mad: 7                 # порог для точек
+  k_mad_ring: 3.5          # порог для крупных масштабов (кандидаты в кольца, дальше строгая проверка)
+  ring_radii: [8, 10, 12.5, 15, 18, 22, 26]           # кольцевой согласованный фильтр, px
+  k_mad_annulus: 6
+  ring_min_snr: 3          # яркость обода ≥ 3 шумов пикселя
+  merge_factor: 1.0        # детекции ближе merge_factor·max(r1,r2) сливаются
+  ring_min_r: 4.5          # r ≥ этого → kind = ring
+  min_intensity: 3.0       # мин. яркость остатка, уровни серого
+  max_edge_ratio: 3.0      # отношение главных кривизн гессиана; больше — «линия» (обод, шкала)
+  min_contrast: 6.0        # центр точки минус медиана кольца [r+2, r+4]
+  border_px: 3
+  workers: 0               # 0 → по числу ядер
+
+calibration:
+  grid_angle_deg: auto     # угол ищется по всему кругу — камера может быть повёрнута как угодно
+  grid_step_px: auto       # шаг ищется по автокорреляции — камера может стоять ближе/дальше
+  perspective: true        # учитывать изменение шага поперёк поля (камера наклонена к окуляру)
+  expected_angle_deg: 12.0   # только для сообщения в логе, на результат не влияет
+  expected_step_px: 51.0     # запасное значение, если сетку не удалось найти
+  angle_tolerance_deg: 6.0
+  step_tolerance_px: 15.0
+  mm_per_division: 0.25    # ВПИСАТЬ цену деления шкалы, мм — тогда появятся столбцы в мм
+  z_sign: 1                # +1: z растёт вниз по кадру (окуляр переворачивает → это «вверх»)
+
+field:
+  switches_s: null         # моменты переключения из протокола, с; null → авто
+                           # (на этом видео авто даёт 31.633, 41.433/41.467, 80.167 с)
+  states: null             # подписи режимов по порядку, например [off, on, off, on]; null → A, B, A, B
+  auto_refine: true        # уточнить моменты по трекам до кадра
+  auto_window_s: 0.33
+  auto_lag_frames: 3
+  auto_gate_px: 6.0
+  auto_fast_px_s: 12.0
+  auto_penalty: auto
+  auto_min_size_s: 2.0
+  auto_min_jump_sigma: 8.0
+  track_window_s: 0.7      # знаконезависимый признак по трекам: окна слева/справа
+  auto_track_k_mad: 12.0
+  refine_max_shift_s: 1.0
+  refine_min_tracks: 5
+
+link:
+  gate_px: 4.0
+  gate_after_switch_px: 6.0
+  gate_r_factor: 0.4       # гейт = gate + 0.4·r (кольца, смена точка↔кольцо)
+  switch_reset_s: 0.5
+  max_gap_frames: 10
+  stitch_max_gap: 60       # склейка обрывков до 2 с (капля под линией шкалы)
+  stitch_gate_px: 4.0
+  stitch_gate_px_per_s: 2.0
+  stitch_fit_points: 15
+  w_r: 2.0
+  w_i: 1.0
+  sigma_loc_px: 0.5
+  diffusion_px2_s: 3.0     # на этом видео D ≈ 2–3 px²/с
+  accel_px_s2: 5.0
+  v_init_sigma_px_s: 15.0
+  min_track_frames_keep: 5
+
+segment:
+  mode: stop               # stop — трек капли заканчивается на первой перезарядке; split — новый segment_id
+  min_piece_s: 1.0
+  k_sigma: auto            # порог z смены скорости; auto — квантиль нулевого распределения
+                           # по поперечной координате s (там перезарядок нет); на этом видео ≈ 5.2
+  k_sigma_floor: 4.0
+  null_fa_rate: 0.01       # доля ложных изломов на кусок трека для автопорога
+  msd_max_lag: 5
+  d_floor_frac: 0.5
+  noise_max_lag_s: 1.0
+  max_breaks_per_interval: 5
+  skip_after_switch_s: 0.0
+
+quality:
+  min_track_s: 2.0
+  max_radius_growth: 1.5   # defocus: сглаженный r вырос в 1.5 раза
+  defocus_min_px: 2.0      # ... и не меньше чем на 2 px
+  flag_fraction: 0.2       # флаг строк переносится на участок, если им помечено > 20% строк
+  edge_factor: 2.0
+  min_segment_s: 1.0
+
+output:
+  dir: output
+  per_particle_csv: true   # только для треков не короче quality.min_track_s
+  plots: true
+  max_plots: 150
+  review_video: true
+  max_review_tracks: 60
+  review_tail_s: 2.0
+  review_scale: 1.0
+
+charge:                    # заряды из пар «поле выключено / включено» одной капли
+  enabled: true
+  off_state: auto          # режим «поле выключено»; auto — с самым узким распределением скоростей (здесь A)
+  fall_sign: auto          # знак v_z при оседании; auto — по медиане в режиме «поле выключено»
+  min_segment_s: 2.0       # оба участка пары не короче, с
+  require_ok: true         # оба участка без флагов качества
+  min_v1_snr: 2.0          # скорость оседания значима (из неё радиус капли)
+  hist_bins: 30
+  # Константы установки — общие для всех видео, вписывать сюда.
+  # Если заданы plate_gap_m, voltage_V и rho_oil_kg_m3 (и масштаб: calibration.mm_per_division
+  # или mm_per_px), появятся радиус капли, заряд в Кл и q/e; иначе только q_rel.
+  mm_per_px: null          # null → calibration.mm_per_division / шаг сетки
+  plate_gap_m: 0.00725        # расстояние между пластинами d, м
+  voltage_V: null          # напряжение U, В. Разное у разных видео → НЕ здесь, а для каждого видео:
+                           #   oiltrack run X.mov -c config.yaml --set charge.voltage_V=700
+                           #   или в videos.yaml (oiltrack batch)
+  reference_voltage_V: 300  # к какому U приводить q_rel при объединении видео (null — U первого)
+  eta_air_Pa_s: 1.83e-5
+  rho_oil_kg_m3: 898      # плотность масла
+  rho_air_kg_m3: 1.2
+  g: 9.81
+  cunningham_b_Pa_m: 8.2e-3  # поправка Каннингема, например 8.2e-3; null — без неё
+  pressure_Pa: 101325

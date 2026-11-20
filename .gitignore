@@ -5,3 +5,11 @@ venv
 *.MOV
 *.csv
 *.jpg
+plots
+!plots/v_z_histogram.png
+*.json
+*.pkl
+cache
+particles
+*.egg-info
+*.lock
